@@ -1,4 +1,6 @@
 ppt_preview/
+*.pptx
+build_*_ppt.ps1
 Thumbs.db
 Desktop.ini
 .DS_Store
