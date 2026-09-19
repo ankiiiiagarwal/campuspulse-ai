@@ -17,9 +17,6 @@ export const GENERIC_PLACE: Building = {
   locationWeight: 3,
 };
 
-/** Named places are labels only — never the source of truth for a report pin. */
-export const NAMED_PLACE_RADIUS_M = 300;
-
 /** Optional named labels for classify / location weight — not map pins or the source of truth. */
 export const BUILDINGS: Building[] = [
   { id: "library", name: "Library", locationWeight: 5 },

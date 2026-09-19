@@ -75,7 +75,7 @@ The green-and-white theme uses short page, chat, message, and hover transitions.
 All implementation changes remain local. No commit, push, deployment, or hosted database migration was performed. Existing project data and environment credentials were preserved.
 
 
-## Production preparation — 19 September 2026
+## Production preparation â€” 19 September 2026
 
 - 98 tests passed across 19 files; two additional geofence/privacy regressions passed in the focused 14-test run.
 - Isolated production build and all 79 HTTP workflow checks passed (stage: `.campuspulse-http-HsJDah`).
@@ -83,3 +83,15 @@ All implementation changes remain local. No commit, push, deployment, or hosted 
 - Previous application data backed up locally, then cleared at the owner's request. No boundary configured; reporting is unrestricted until an admin saves an area.
 - Vercel uses real Supabase and configured AI credentials. Local/demo storage is blocked on Vercel; optional seeds cannot load in production.
 - Physical microphone and GPS permission behavior depends on the visitor's browser/device; automated tests do not assert physical-device access.
+
+
+## Hosted production verification
+
+- Vercel production build completed and the public HTTPS alias was checked.
+- 27 live checks passed: empty database, worldwide reporting, page and JavaScript delivery, disabled demo page, admin and department login, Supabase photo upload/download, real Postgres persistence, optional area save/enforcement/removal, assignment, seven-day ETA, resolution, ticket tracking, chatbot and transcription configuration.
+- Live Groq transcription also returned the correct sentence from a synthesized WAV file. This is a service check, not a hardware microphone test.
+- Postgres normalizes timestamps to `+00:00`; verification compares instants instead of requiring the same ISO string suffix as JavaScript's `Z`.
+- Next.js streamed not-found pages can return HTTP 200: the production demo test verifies not-found/noindex content and absence of demo account content.
+- All temporary reports, clusters, uploads and test audit entries were removed. Final complaint, incident, location and boundary counts were zero.
+- GitHub push confirmed by matching remote branch SHA. Deployment was performed using the authenticated Vercel CLI. Automatic GitHub-to-Vercel linking was not established: Vercel rejected repository access; future updates can still be deployed with the CLI.
+- Live credentials are saved locally in ignored `.data/live-access.json`; no credentials were committed.

@@ -160,7 +160,7 @@ const GUIDES: Guide[] = [
     steps: [
       "Open Report. No login, no name.",
       "Write what is broken in a sentence, or hold the mic and speak.",
-      "Pick the place (IT, Hostel, Mess, Campus, or Library), add the floor or spot, then mark the pin inside campus.",
+      "Pick the place (IT, Hostel, Mess, Campus, or Library), add the floor or spot, then mark the issue location. If an admin has set a reporting area, choose a pin inside it.",
       "Submit. You get a ticket ID. If the same issue is already open nearby, you can tap Me too instead.",
     ],
     reportWhen: "Use Report when a safe retry did not help, or when the job needs staff (wiring, leaks, dark paths, mess, washrooms).",
