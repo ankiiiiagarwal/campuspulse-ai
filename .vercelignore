@@ -1,0 +1,13 @@
+.data/
+.data-demo/
+.env*
+!.env.local.example
+.next/
+.next-dev/
+.next-demo/
+supabase/.temp/
+public/uploads/*
+!public/uploads/.gitkeep
+*.pptx
+ppt_preview/
+*.tsbuildinfo

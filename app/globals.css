@@ -3,9 +3,9 @@
 @tailwind utilities;
 
 :root {
-  --paper: #f3eadc;
-  --ink: #1a1714;
-  --rule: #d7cbb6;
+  --paper: #f4f7f6;
+  --ink: #18332f;
+  --rule: #dce5e2;
   --critical: #c43828;
   --amber: #e3a008;
   --onit: #2b5ea8;
@@ -21,13 +21,19 @@ body {
 body {
   min-height: 100vh;
   background-image:
-    radial-gradient(ellipse at 12% -10%, rgba(227, 160, 8, 0.14), transparent 42%),
-    radial-gradient(ellipse at 90% 0%, rgba(43, 94, 168, 0.08), transparent 36%);
+    radial-gradient(ellipse at 10% 0%, rgba(90, 186, 157, 0.09), transparent 38%),
+    radial-gradient(ellipse at 95% 5%, rgba(182, 204, 234, 0.12), transparent 30%);
 }
 
 .leaflet-container {
-  background: #d8cfc0 !important;
-  font-family: "Source Sans 3", "Segoe UI", sans-serif;
+  width: 100%;
+  height: 100%;
+  background: #e5eeea !important;
+  font-family: var(--font-sans), "Segoe UI", sans-serif;
+}
+
+.cp-campus-lock .leaflet-container {
+  background: #f4f7f6 !important;
 }
 
 .leaflet-popup-content-wrapper,
@@ -63,9 +69,60 @@ body {
   background: var(--resolved);
 }
 
+/* Closed but unconfirmed: hollow green until students verify the fix. */
+.cp-pin.awaiting {
+  background: #fffaf1;
+  border-color: var(--resolved);
+  box-shadow: 0 0 0 3px rgba(47, 125, 74, 0.3), 0 6px 14px rgba(26, 23, 20, 0.22);
+}
+
 .cp-pin.pick {
   background: #1e2a3a;
   transform: scale(1.15);
+}
+
+.cp-pin.dest {
+  box-shadow: 0 0 0 7px rgba(30, 42, 58, 0.28), 0 6px 14px rgba(26, 23, 20, 0.22);
+}
+
+.leaflet-popup-content .go-btn,
+.leaflet-popup-content .mt-btn {
+  border: 0;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.leaflet-popup-content .go-btn {
+  background: #1e2a3a;
+  color: #fffaf1;
+}
+
+.leaflet-popup-content .mt-btn {
+  background: #e8dcc8;
+  color: #1a1714;
+}
+
+.leaflet-popup-content .check-btn {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  background: var(--onit);
+  color: #fffaf1;
+  text-decoration: none;
+}
+
+.cp-vertex {
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  background: #fffaf1;
+  border: 2px solid #2b5ea8;
+  box-shadow: 0 2px 8px rgba(26, 23, 20, 0.25);
 }
 
 .leaflet-control-attribution {
@@ -84,4 +141,57 @@ body {
 
 .leaflet-tooltip.building-tip::before {
   display: none;
+}
+
+/* Shared motion and touch language. Only transform/opacity animate on entry. */
+html { scroll-behavior: smooth; scroll-padding-top: 8rem; }
+body { overflow-wrap: anywhere; }
+button, a, input, textarea, select { -webkit-tap-highlight-color: transparent; }
+button, a, input, textarea, select { transition: background-color 180ms ease, color 180ms ease, border-color 180ms ease, box-shadow 180ms ease; }
+button:not(:disabled), summary { cursor: pointer; }
+button:disabled { cursor: not-allowed; }
+a:focus-visible, button:focus-visible, summary:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 3px solid #278774; outline-offset: 3px; }
+input, textarea, select { accent-color: #123d35; }
+textarea { resize: vertical; }
+.cp-page-enter { animation: cp-enter 380ms cubic-bezier(.2,.7,.2,1) backwards; }
+.cp-card { border: 1px solid var(--rule); background: #fff; border-radius: 1.5rem; box-shadow: 0 8px 30px -16px #123d3522; }
+.cp-lift { transition: transform 180ms ease, box-shadow 180ms ease; }
+.cp-kicker { font-size: .7rem; font-weight: 700; letter-spacing: .15em; text-transform: uppercase; color: #4d7067; }
+.cp-step { display: inline-flex; align-items:center; justify-content:center; width: 1.55rem; height: 1.55rem; margin-right: .55rem; border-radius: .5rem; background: #e5f0eb; color: #123d35; font-size:.75rem; font-weight:700; }
+.cp-chat-enter { transform-origin: bottom right; animation: cp-chat-in 220ms cubic-bezier(.2,.7,.2,1) both; }
+.cp-message { animation: cp-enter 220ms ease both; overflow-wrap: anywhere; }
+.cp-dot { display:inline-block; width:5px; height:5px; border-radius:50%; background: #548b7d; animation: cp-dot 1s ease-in-out infinite; }
+.cp-dot:nth-child(2) { animation-delay:150ms; } .cp-dot:nth-child(3) { animation-delay:300ms; }
+.cp-skip-link { position:fixed; top:-80px; left:16px; z-index:3000; border-radius:12px; padding:12px 20px; background:#123d35; color:white; }
+.cp-skip-link:focus { top:12px; }
+.cp-nav-scroll { scrollbar-width:none; } .cp-nav-scroll::-webkit-scrollbar { display:none; }
+.cp-chat-shell { bottom: max(1rem, env(safe-area-inset-bottom)); right: max(1rem, env(safe-area-inset-right)); }
+.cp-chat-panel { width:min(25rem, calc(100vw - 2rem)); height:min(36rem, calc(100dvh - 6.5rem)); }
+.cp-chat-log { overscroll-behavior:contain; scrollbar-width:thin; }
+.cp-map-shell { isolation:isolate; }
+.cp-map-shell .leaflet-control-zoom { border:1px solid var(--rule) !important; border-radius:12px; overflow:hidden; box-shadow:0 3px 14px #18332f16; }
+.cp-map-shell .leaflet-control-zoom a { width:38px; height:38px; line-height:38px; color:#123d35; }
+.cp-map-shell .leaflet-popup-content-wrapper { background:white; border-radius:16px; }
+.cp-map-shell .leaflet-control-attribution { max-width:90%; }
+@keyframes cp-enter { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+@keyframes cp-chat-in { from { opacity:0; transform:translateY(12px) scale(.98); } to { opacity:1; transform:translateY(0) scale(1); } }
+@keyframes cp-dot { 0%,80%,100% { opacity:.35; transform:translateY(0); } 40% { opacity:1; transform:translateY(-3px); } }
+@media (hover:hover) { .cp-lift:hover { transform:translateY(-2px); box-shadow:0 12px 32px -12px #123d3525; } }
+@media (max-width:640px) {
+  input, textarea, select { font-size:16px !important; }
+  button, summary { min-height:44px; }
+  h1 { text-wrap:balance; }
+  .cp-chat-shell { right:.75rem; bottom:max(.75rem, env(safe-area-inset-bottom)); }
+  .cp-chat-panel { width:calc(100vw - 1.5rem); }
+  .leaflet-popup-content { max-width:calc(100vw - 6rem); }
+}
+@media (prefers-reduced-motion:reduce) {
+  html { scroll-behavior:auto; }
+  *, *::before, *::after { animation:none !important; transition:none !important; scroll-behavior:auto !important; }
+}
+@media print {
+  body { background:white; }
+  body > header, .cp-chat-shell, .cp-skip-link { display:none !important; }
+  main { padding:0 !important; }
+  .cp-page-enter { animation:none; }
 }

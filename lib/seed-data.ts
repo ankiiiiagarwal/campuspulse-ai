@@ -1,7 +1,14 @@
+/**
+ * Optional demo dataset for presentations.
+ * The live app does NOT load this automatically into .data/store.json.
+ * Use `npm run demo` for an isolated, populated local demo without removing real data.
+ */
 import { locationWeightFor } from "./campus";
+import { canonicalDepartment } from "./departments";
 import { tokenEmbedding } from "./duplicates";
 import { computePriority } from "./scoring";
-import type { Category, Cluster, Confirmation, Department, Issue, Severity, Status } from "./types";
+import type { Category, Cluster, Confirmation, Issue, Severity, Status } from "./types";
+import { VERIFY_WINDOW_HOURS, verifyDeadlineFrom } from "./verification";
 
 function hoursAgo(hours: number): string {
   return new Date(Date.now() - hours * 3_600_000).toISOString();
@@ -20,7 +27,7 @@ interface SeedIssue {
   description: string;
   category: Category;
   severity: Severity;
-  department: Department;
+  department: string;
   status: Status;
   safety: number;
   building: string;
@@ -473,13 +480,59 @@ const CLUSTER_ME_TOO: Record<number, number> = {
   4: 1,
 };
 
+/** Closed but nobody checked, so the desk gets no credit for it. */
+const UNCONFIRMED_CLUSTERS = new Set([21]);
+
+/** Students rejected the first fix claim on these, so the job came back once. */
+const SENT_BACK_CLUSTERS = new Set([9, 13]);
+
+/** Demo spread of fix-claim outcomes across verified, awaiting and unconfirmed. */
+function seedProof(row: SeedIssue): Pick<
+  Issue,
+  "verify_deadline_at" | "verified_count" | "disputed_count" | "verified_at" | "reopen_count" | "claim_round"
+> {
+  const sentBack = SENT_BACK_CLUSTERS.has(row.cluster);
+  const reopen_count = sentBack ? 1 : 0;
+  const claim_round = reopen_count;
+  if (row.status !== "resolved" || row.resolvedH == null) {
+    return {
+      verify_deadline_at: null,
+      verified_count: 0,
+      disputed_count: 0,
+      verified_at: null,
+      reopen_count,
+      claim_round,
+    };
+  }
+  const claimedAt = hoursAgo(row.resolvedH);
+  const deadline = verifyDeadlineFrom(claimedAt);
+  if (UNCONFIRMED_CLUSTERS.has(row.cluster)) {
+    return { verify_deadline_at: deadline, verified_count: 0, disputed_count: 0, verified_at: null, reopen_count, claim_round };
+  }
+  if (row.resolvedH < VERIFY_WINDOW_HOURS) {
+    // Window still open — one student has confirmed, the claim is not settled yet.
+    return { verify_deadline_at: deadline, verified_count: 1, disputed_count: 0, verified_at: null, reopen_count, claim_round };
+  }
+  return {
+    verify_deadline_at: deadline,
+    verified_count: 2,
+    disputed_count: 0,
+    verified_at: hoursAgo(Math.max(1, row.resolvedH - 2)),
+    reopen_count,
+    claim_round,
+  };
+}
+
 export function buildSeed(): { issues: Issue[]; clusters: Cluster[]; confirmations: Confirmation[] } {
   const issues: Issue[] = RAW.map((row) => {
     const created_at = hoursAgo(row.createdH);
     const assigned_at = row.assignedH != null ? hoursAgo(row.assignedH) : null;
     const resolved_at = row.resolvedH != null ? hoursAgo(row.resolvedH) : null;
     const eta_at = row.etaH != null ? hoursAgo(row.etaH) : null;
-    const location_weight = locationWeightFor(row.building);
+    const location_weight = locationWeightFor(row.building, {
+      category: row.category,
+      description: row.description,
+    });
     const report_count = RAW.filter((r) => r.cluster === row.cluster).length;
     const me_too = CLUSTER_ME_TOO[row.cluster] ?? 0;
     return {
@@ -488,7 +541,7 @@ export function buildSeed(): { issues: Issue[]; clusters: Cluster[]; confirmatio
       description: row.description,
       category: row.category,
       severity: row.severity,
-      department: row.department,
+      department: canonicalDepartment(row.department, row.building, row.category),
       status: row.status,
       safety: row.safety,
       location_weight,
@@ -510,6 +563,9 @@ export function buildSeed(): { issues: Issue[]; clusters: Cluster[]; confirmatio
       created_at,
       assigned_at,
       resolved_at,
+      worker_name: null,
+      escalated_at: row.status === "open" && row.createdH > 72 ? hoursAgo(72) : null,
+      ...seedProof(row),
     };
   });
 

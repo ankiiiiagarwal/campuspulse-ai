@@ -1,19 +1,23 @@
 import { BUILDINGS, inferBuildingFromText } from "./campus";
+import { normalizeReportText } from "./report-language";
+import { departmentForReport } from "./departments";
+import { geminiGenerate } from "./gemini";
+import { groqChat } from "./groq";
 import type { Category, ClassifyResult, Department, Severity } from "./types";
 
 export const CATEGORY_TABLE: Record<
   Category,
   { department: Department; defaultSafety: number }
 > = {
-  "Electrical / lights": { department: "Electrical", defaultSafety: 4 },
-  "Water / leakage": { department: "Plumbing", defaultSafety: 3 },
+  "Electrical / lights": { department: "Campus", defaultSafety: 4 },
+  "Water / leakage": { department: "Campus", defaultSafety: 3 },
   "Wi-Fi / network": { department: "IT", defaultSafety: 2 },
-  Furniture: { department: "Estate", defaultSafety: 2 },
-  Washroom: { department: "Housekeeping", defaultSafety: 3 },
-  Hostel: { department: "Hostel warden", defaultSafety: 3 },
-  Mess: { department: "Mess committee", defaultSafety: 3 },
-  "Road / path / safety": { department: "Security + estate", defaultSafety: 5 },
-  Other: { department: "Estate", defaultSafety: 2 },
+  Furniture: { department: "Campus", defaultSafety: 2 },
+  Washroom: { department: "Campus", defaultSafety: 3 },
+  Hostel: { department: "Hostel", defaultSafety: 3 },
+  Mess: { department: "Mess", defaultSafety: 3 },
+  "Road / path / safety": { department: "Campus", defaultSafety: 5 },
+  Other: { department: "Campus", defaultSafety: 2 },
 };
 
 const KEYWORD_RULES: Array<{ category: Category; words: string[] }> = [
@@ -35,7 +39,7 @@ function severityFromSafety(safety: number): Severity {
 }
 
 function bumpSafety(text: string, category: Category, base: number): number {
-  const t = text.toLowerCase();
+  const t = normalizeReportText(text);
   let safety = base;
   if (category === "Road / path / safety" || /\b(dark|unsafe|night|assault)\b/.test(t)) safety = Math.max(safety, 5);
   if (/\b(shock|spark|exposed wire|live wire|short circuit)\b/.test(t)) safety = Math.max(safety, 5);
@@ -46,7 +50,7 @@ function bumpSafety(text: string, category: Category, base: number): number {
 }
 
 export function classifyWithKeywords(description: string, hintBuilding?: string): ClassifyResult {
-  const t = description.toLowerCase();
+  const t = normalizeReportText(description);
   let category: Category = "Other";
   let bestHits = 0;
   for (const rule of KEYWORD_RULES) {
@@ -66,7 +70,7 @@ export function classifyWithKeywords(description: string, hintBuilding?: string)
   return {
     category,
     severity: severityFromSafety(safety),
-    department: meta.department,
+    department: departmentForReport(category, building),
     safety,
     building,
     source: "fallback",
@@ -101,67 +105,58 @@ function coerceCategory(value: unknown): Category {
   return "Other";
 }
 
+const CLASSIFY_SYSTEM =
+  "You classify campus facility reports. Reply with JSON only: {category, severity, department, safety, building}. category must be one of: Electrical / lights, Water / leakage, Wi-Fi / network, Furniture, Washroom, Hostel, Mess, Road / path / safety, Other. severity: low|medium|high|critical. department must be one of: IT, Hostel, Mess, Campus, Library. Route Wi-Fi to IT, mess/food to Mess, hostel rooms to Hostel, library building (non-Wi-Fi) to Library, everything else to Campus. safety is 1-5 (dark path, exposed wiring, water+wiring = 5). building is the named campus building or empty.";
+
+function resultFromModel(raw: string | null, description: string, hintBuilding: string | undefined, source: "gemini" | "groq"): ClassifyResult | null {
+  const parsed = extractJson(raw || "");
+  if (!parsed) return null;
+  const category = coerceCategory(parsed.category);
+  const meta = CATEGORY_TABLE[category];
+  let safety = Number(parsed.safety);
+  if (!Number.isFinite(safety)) safety = meta.defaultSafety;
+  safety = bumpSafety(description, category, Math.round(safety));
+  const severityRaw = String(parsed.severity || "").toLowerCase();
+  const severity = (["low", "medium", "high", "critical"].includes(severityRaw)
+    ? severityRaw
+    : severityFromSafety(safety)) as Severity;
+  const building = String(hintBuilding || parsed.building || inferBuildingFromText(description)?.name || "");
+  return {
+    category,
+    severity,
+    department: departmentForReport(category, building || hintBuilding),
+    safety,
+    building,
+    source,
+  };
+}
+
+async function classifyWithGemini(description: string, hintBuilding?: string): Promise<ClassifyResult | null> {
+  const raw = await geminiGenerate({
+    system: CLASSIFY_SYSTEM,
+    messages: [{ role: "user", content: `Report: ${description}\nHint building: ${hintBuilding || "unknown"}` }],
+    temperature: 0.1,
+    maxOutputTokens: 256,
+    json: true,
+    timeoutMs: 12000,
+  });
+  return resultFromModel(raw, description, hintBuilding, "gemini");
+}
+
 async function classifyWithGroq(description: string, hintBuilding?: string): Promise<ClassifyResult | null> {
-  const key = process.env.GROQ_API_KEY;
-  if (!key) return null;
-  const model = process.env.GROQ_MODEL || "llama-3.1-8b-instant";
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 8000);
-  try {
-    const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${key}`,
-        "Content-Type": "application/json",
-      },
-      signal: controller.signal,
-      body: JSON.stringify({
-        model,
-        temperature: 0.1,
-        response_format: { type: "json_object" },
-        messages: [
-          {
-            role: "system",
-            content:
-              "You classify campus facility reports. Reply with JSON only: {category, severity, department, safety, building}. category must be one of: Electrical / lights, Water / leakage, Wi-Fi / network, Furniture, Washroom, Hostel, Mess, Road / path / safety, Other. severity: low|medium|high|critical. department: Electrical|Plumbing|IT|Estate|Housekeeping|Hostel warden|Mess committee|Security + estate. safety is 1-5 (dark path, exposed wiring, water+wiring = 5). building is the named campus building or empty.",
-          },
-          {
-            role: "user",
-            content: `Report: ${description}\nHint building: ${hintBuilding || "unknown"}`,
-          },
-        ],
-      }),
-    });
-    if (!res.ok) return null;
-    const data = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
-    const parsed = extractJson(data.choices?.[0]?.message?.content || "");
-    if (!parsed) return null;
-    const category = coerceCategory(parsed.category);
-    const meta = CATEGORY_TABLE[category];
-    let safety = Number(parsed.safety);
-    if (!Number.isFinite(safety)) safety = meta.defaultSafety;
-    safety = bumpSafety(description, category, Math.round(safety));
-    const severityRaw = String(parsed.severity || "").toLowerCase();
-    const severity = (["low", "medium", "high", "critical"].includes(severityRaw)
-      ? severityRaw
-      : severityFromSafety(safety)) as Severity;
-    const department = (String(parsed.department || meta.department) as Department) || meta.department;
-    return {
-      category,
-      severity,
-      department: CATEGORY_TABLE[category].department || department,
-      safety,
-      building: String(parsed.building || hintBuilding || inferBuildingFromText(description)?.name || ""),
-      source: "groq",
-    };
-  } catch {
-    return null;
-  } finally {
-    clearTimeout(timer);
-  }
+  const raw = await groqChat({
+    system: CLASSIFY_SYSTEM,
+    messages: [{ role: "user", content: `Report: ${description}\nHint building: ${hintBuilding || "unknown"}` }],
+    temperature: 0.1,
+    json: true,
+    timeoutMs: 8000,
+  });
+  return resultFromModel(raw, description, hintBuilding, "groq");
 }
 
 export async function classifyReport(description: string, hintBuilding?: string): Promise<ClassifyResult> {
+  const gemini = await classifyWithGemini(description, hintBuilding);
+  if (gemini) return gemini;
   const groq = await classifyWithGroq(description, hintBuilding);
   if (groq) return groq;
   return classifyWithKeywords(description, hintBuilding);

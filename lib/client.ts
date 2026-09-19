@@ -1,3 +1,69 @@
+export type StaffDeskKind = "admin" | "department";
+
+export function staffDeskHeaders(desk: StaffDeskKind, extra?: HeadersInit): HeadersInit {
+  return { "X-CP-Desk": desk, ...(extra || {}) };
+}
+
+export type GpsFix = { lat: number; lng: number; accuracy: number };
+
+export type BrowserLocation =
+  | ({ ok: true } & GpsFix)
+  | { ok: false; reason: "denied" | "unavailable" | "timeout" | "unsupported" };
+
+export function gpsFailureMessage(reason: Extract<BrowserLocation, { ok: false }>["reason"]): string {
+  if (reason === "denied") return "Location permission denied. Allow GPS in the browser, then recalibrate.";
+  if (reason === "unsupported") return "This browser cannot share GPS.";
+  if (reason === "timeout") return "GPS timed out. Step outside or nearer a window, then recalibrate.";
+  return "Could not read GPS. Try recalibrate again.";
+}
+
+function failReason(err: GeolocationPositionError): Extract<BrowserLocation, { ok: false }>["reason"] {
+  if (err.code === 1) return "denied";
+  if (err.code === 3) return "timeout";
+  return "unavailable";
+}
+
+export function requestBrowserLocation(options?: PositionOptions): Promise<BrowserLocation> {
+  if (typeof navigator === "undefined" || !navigator.geolocation) {
+    return Promise.resolve({ ok: false, reason: "unsupported" });
+  }
+  return new Promise((resolve) => {
+    navigator.geolocation.getCurrentPosition(
+      (pos) =>
+        resolve({
+          ok: true,
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+          accuracy: pos.coords.accuracy,
+        }),
+      (err) => resolve({ ok: false, reason: failReason(err) }),
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0, ...options },
+    );
+  });
+}
+
+/** Live GPS. Field staff can be anywhere — this is not limited to the campus fence. */
+export function watchBrowserLocation(
+  onFix: (fix: GpsFix) => void,
+  onFail?: (reason: Extract<BrowserLocation, { ok: false }>["reason"]) => void,
+): () => void {
+  if (typeof navigator === "undefined" || !navigator.geolocation) {
+    onFail?.("unsupported");
+    return () => {};
+  }
+  const id = navigator.geolocation.watchPosition(
+    (pos) =>
+      onFix({
+        lat: pos.coords.latitude,
+        lng: pos.coords.longitude,
+        accuracy: pos.coords.accuracy,
+      }),
+    (err) => onFail?.(failReason(err)),
+    { enableHighAccuracy: true, timeout: 20000, maximumAge: 4000 },
+  );
+  return () => navigator.geolocation.clearWatch(id);
+}
+
 export function getClientHash(): string {
   const key = "cp_client_hash";
   let value = localStorage.getItem(key);
@@ -28,11 +94,20 @@ export function formatHours(hours: number | null | undefined): string {
   return `${(hours / 24).toFixed(1)} d`;
 }
 
+export function formatDateTime(iso: string, locale?: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleString(locale || undefined, {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 export function ageLabel(iso: string): string {
-  const hours = Math.max(0, (Date.now() - new Date(iso).getTime()) / 3_600_000);
-  if (hours < 1) return "just now";
-  if (hours < 24) return `${Math.round(hours)}h ago`;
-  return `${Math.round(hours / 24)}d ago`;
+  return formatDateTime(iso);
 }
 
 export function statusLabel(status: string): string {
@@ -40,4 +115,11 @@ export function statusLabel(status: string): string {
   if (status === "assigned") return "Assigned";
   if (status === "resolved") return "Resolved";
   return "Open";
+}
+
+export function reportCoordinates(search: Pick<URLSearchParams, "get">): { lat: number; lng: number } | null {
+  const latText = search.get("lat"), lngText = search.get("lng");
+  if (!latText?.trim() || !lngText?.trim()) return null;
+  const lat = Number(latText), lng = Number(lngText);
+  return Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180 ? { lat, lng } : null;
 }

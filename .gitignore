@@ -19,6 +19,8 @@ Desktop.ini
 
 # next
 /.next/
+/.next-dev/
+/.next-demo/
 /out/
 
 # env and local data
@@ -26,6 +28,7 @@ Desktop.ini
 .env*.local
 !.env.local.example
 .data/
+.data-demo/
 public/uploads/*
 !public/uploads/.gitkeep
 
@@ -36,3 +39,5 @@ yarn-error.log*
 .vercel
 *.tsbuildinfo
 next-env.d.ts
+
+supabase/.temp/

@@ -13,7 +13,11 @@ export async function GET(req: Request) {
     return NextResponse.json({ matches: [] });
   }
   const snap = await loadSnapshot();
-  const matches = findNearby(snap.clusters, snap.issues, lat, lng, text, tokenEmbedding(text)).slice(0, 3);
+  const locationId = url.searchParams.get("location") || undefined;
+  const location = locationId ? snap.locations?.find(l => l.id === locationId) : undefined;
+  if (locationId && !location) return NextResponse.json({ matches: [] });
+  const building = location ? `${location.department}, ${location.name}` : url.searchParams.get("building")?.slice(0, 160);
+  const matches = findNearby(snap.clusters, snap.issues, location?.lat ?? lat, location?.lng ?? lng, text.slice(0,4000), tokenEmbedding(text.slice(0,4000)), { building, location_id: locationId }).slice(0, 3);
   return NextResponse.json({
     matches: matches.map((m) => ({
       cluster_id: m.cluster.id,

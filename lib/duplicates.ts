@@ -1,4 +1,5 @@
 import type { Cluster, Issue } from "./types";
+import { floorHint, normalizeReportText, problemSignature } from "./report-language";
 
 const EARTH_M = 6371000;
 export const MERGE_RADIUS_M = 40;
@@ -44,9 +45,7 @@ const STOP = new Set([
 
 export function tokens(text: string): Set<string> {
   return new Set(
-    text
-      .toLowerCase()
-      .replace(/[^a-z0-9\s-]/g, " ")
+    normalizeReportText(text)
       .split(/\s+/)
       .map((w) => w.replace(/-/g, ""))
       .filter((w) => w.length > 2 && !STOP.has(w)),
@@ -100,6 +99,8 @@ export function cosine(a: number[] | null | undefined, b: number[] | null | unde
 }
 
 export function textSimilar(a: string, b: string, embedA?: number[] | null, embedB?: number[] | null): boolean {
+  const sa = problemSignature(a), sb = problemSignature(b);
+  if (sa.length && sb.length && !sa.some(s => sb.includes(s))) return false;
   const ta = tokens(a);
   const tb = tokens(b);
   if (jaccard(ta, tb) >= TEXT_JACCARD_MIN) return true;
@@ -126,6 +127,7 @@ export function findNearby(
   lng: number,
   text: string,
   embedding?: number[] | null,
+  context?: { building?: string; location_id?: string | null },
 ): NearbyMatch[] {
   const openClusters = clusters.filter((c) => c.status !== "resolved");
   const matches: NearbyMatch[] = [];
@@ -135,6 +137,12 @@ export function findNearby(
     const members = issues.filter((i) => i.cluster_id === cluster.id);
     const lead = members.find((i) => i.status !== "resolved") ?? members[0];
     if (!lead) continue;
+    if (context?.location_id && lead.location_id !== context.location_id) continue;
+    if (context?.building) {
+      const a = floorHint(context.building), b = floorHint(lead.building);
+      if (a !== b && (a || b)) continue;
+      if (normalizeReportText(context.building) !== normalizeReportText(lead.building)) continue;
+    }
     const close = meters <= MERGE_RADIUS_M;
     const nearby = meters <= 90;
     const similar = textSimilar(text, `${cluster.title} ${lead.description}`, embedding, lead.embedding);
@@ -153,7 +161,8 @@ export function findMergeTarget(
   lng: number,
   text: string,
   embedding?: number[] | null,
+  context?: { building?: string; location_id?: string | null },
 ): NearbyMatch | null {
-  const hits = findNearby(clusters, issues, lat, lng, text, embedding).filter((m) => m.meters <= MERGE_RADIUS_M + 8);
+  const hits = findNearby(clusters, issues, lat, lng, text, embedding, context).filter((m) => m.meters <= MERGE_RADIUS_M + 8);
   return hits[0] ?? null;
 }
